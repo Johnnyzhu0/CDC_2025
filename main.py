@@ -58,19 +58,26 @@ class SpaceEconomyAnalyzer:
                 
                 # Extract header (years)
                 header_line = data_lines[0]
-                years = [col.strip() for col in header_line.split() if col.strip().isdigit()]
+                columns = header_line.split()
+                years = [col.strip() for col in columns if col.strip().isdigit() and len(col.strip()) == 4]
                 
-                # Find the total/aggregate row (usually first data row)
+                if not years:
+                    print(f"Warning: Could not find year columns in {file_name}")
+                    continue
+                
+                # Look for space economy total row or aggregate data
                 total_row = None
+                
+                # Method 1: Look for a row that mentions "space economy" or similar
                 for line in data_lines[1:]:
-                    parts = line.split()
-                    if len(parts) >= len(years) + 2:  # Index + description + data
-                        # Extract numeric values
+                    if any(keyword in line.lower() for keyword in ['space economy', 'total', 'all industries']):
+                        parts = line.split()
+                        # Try to extract numeric values from the end
                         numeric_data = []
-                        for part in parts[-len(years):]:  # Take last N values where N = number of years
+                        for part in parts[-len(years):]:
                             try:
-                                if part != '…' and part != 'nan':
-                                    numeric_data.append(float(part))
+                                if part != '…' and part != 'nan' and part.replace(',', '').replace('.', '').isdigit():
+                                    numeric_data.append(float(part.replace(',', '')))
                                 else:
                                     numeric_data.append(np.nan)
                             except:
@@ -79,6 +86,56 @@ class SpaceEconomyAnalyzer:
                         if len(numeric_data) == len(years) and not all(pd.isna(numeric_data)):
                             total_row = numeric_data
                             break
+                
+                # Method 2: If no explicit total found, look for the first row with substantial numeric data
+                if total_row is None:
+                    for line in data_lines[1:]:
+                        parts = line.split()
+                        if len(parts) >= len(years) + 2:  # Index + description + data
+                            # Extract numeric values from the end
+                            numeric_data = []
+                            for part in parts[-len(years):]:
+                                try:
+                                    if part != '…' and part != 'nan' and part.replace(',', '').replace('.', '').isdigit():
+                                        value = float(part.replace(',', ''))
+                                        # Only accept values that seem reasonable (not too small)
+                                        if value > 10:  # Reasonable threshold for space economy data
+                                            numeric_data.append(value)
+                                        else:
+                                            numeric_data.append(np.nan)
+                                    else:
+                                        numeric_data.append(np.nan)
+                                except:
+                                    numeric_data.append(np.nan)
+                            
+                            # Check if we have enough valid data points
+                            valid_points = sum(1 for x in numeric_data if not pd.isna(x))
+                            if len(numeric_data) == len(years) and valid_points >= len(years) * 0.5:
+                                total_row = numeric_data
+                                break
+                
+                # Method 3: Try to find manufacturing row as a proxy for major space economy component
+                if total_row is None and series_name in ['Employment', 'Compensation']:
+                    for line in data_lines[1:]:
+                        if 'Manufacturing' in line or 'Computer and electronic products' in line:
+                            parts = line.split()
+                            if len(parts) >= len(years) + 2:
+                                numeric_data = []
+                                for part in parts[-len(years):]:
+                                    try:
+                                        if part != '…' and part != 'nan' and part.replace(',', '').replace('.', '').isdigit():
+                                            value = float(part.replace(',', ''))
+                                            numeric_data.append(value)
+                                        else:
+                                            numeric_data.append(np.nan)
+                                    except:
+                                        numeric_data.append(np.nan)
+                                
+                                valid_points = sum(1 for x in numeric_data if not pd.isna(x))
+                                if len(numeric_data) == len(years) and valid_points >= len(years) * 0.5:
+                                    total_row = numeric_data
+                                    print(f"  Using Manufacturing data as proxy for {series_name}")
+                                    break
                 
                 if total_row is not None:
                     # Create time series
@@ -217,9 +274,9 @@ class SpaceEconomyAnalyzer:
         self.granger_results = pd.DataFrame(granger_results)
         return self.granger_results
     
-    def fit_arima_models(self, forecast_periods=5):
-        """Fit ARIMA models for forecasting"""
-        print(f"\nFitting ARIMA models (forecasting {forecast_periods} periods)...")
+    def fit_arima_models(self, forecast_periods=7):
+        """Fit ARIMA models for forecasting 2024-2030"""
+        print(f"\nFitting ARIMA models (forecasting 2024-2030)...")
         
         arima_results = {}
         
@@ -261,24 +318,38 @@ class SpaceEconomyAnalyzer:
                                 continue
                     
                     if best_model is not None:
-                        # Generate forecasts
+                        # Generate forecasts for 2024-2030 (7 years from 2023)
                         try:
                             forecast = best_model.get_forecast(steps=forecast_periods)
-                            forecast_index = pd.date_range(
-                                start=series.index[-1] + pd.DateOffset(years=1),
-                                periods=forecast_periods,
-                                freq='AS'
-                            )
+                            
+                            # Create explicit forecast years 2024-2030
+                            forecast_years = [2024, 2025, 2026, 2027, 2028, 2029, 2030]
+                            forecast_index = pd.to_datetime(forecast_years, format='%Y')
+                            
+                            # Get forecast values and confidence intervals
+                            forecast_mean = pd.Series(forecast.predicted_mean.values, index=forecast_index)
+                            forecast_ci = pd.DataFrame(forecast.conf_int().values, 
+                                                     index=forecast_index,
+                                                     columns=['lower_ci', 'upper_ci'])
                             
                             arima_results[series_name] = {
                                 'model': best_model,
                                 'order': best_order,
                                 'aic': best_aic,
-                                'forecast_mean': pd.Series(forecast.predicted_mean, index=forecast_index),
-                                'forecast_ci': forecast.conf_int(),
+                                'forecast_mean': forecast_mean,
+                                'forecast_ci': forecast_ci,
+                                'forecast_years': forecast_years,
                                 'fitted_values': best_model.fittedvalues,
-                                'residuals': best_model.resid
+                                'residuals': best_model.resid,
+                                'last_observed_year': series.index[-1].year,
+                                'last_observed_value': series.iloc[-1]
                             }
+                            
+                            # Print forecast summary
+                            print(f"    ✅ {series_name} ARIMA{best_order} forecasts:")
+                            for year, value in zip(forecast_years, forecast_mean.values):
+                                print(f"       {year}: {value:,.0f}")
+                                
                         except Exception as e:
                             print(f"    ❌ Forecast error for {series_name}: {e}")
                     else:
@@ -287,9 +358,9 @@ class SpaceEconomyAnalyzer:
         self.arima_results = arima_results
         return arima_results
     
-    def geometric_brownian_motion(self, n_simulations=1000, forecast_periods=5):
-        """Fit Geometric Brownian Motion model"""
-        print(f"\nFitting Geometric Brownian Motion (GBM) models...")
+    def geometric_brownian_motion(self, n_simulations=1000, forecast_periods=7):
+        """Fit Geometric Brownian Motion model for 2024-2030"""
+        print(f"\nFitting Geometric Brownian Motion (GBM) models for 2024-2030...")
         
         gbm_results = {}
         
@@ -313,9 +384,9 @@ class SpaceEconomyAnalyzer:
                     # Monte Carlo simulation
                     np.random.seed(42)  # For reproducibility
                     dt = 1.0  # Annual time step
-                    S0 = series.iloc[-1]  # Last observed value
+                    S0 = series.iloc[-1]  # Last observed value (2023)
                     
-                    # Generate forecast paths
+                    # Generate forecast paths for 2024-2030 (7 years)
                     forecast_paths = np.zeros((n_simulations, forecast_periods))
                     
                     for i in range(n_simulations):
@@ -330,11 +401,9 @@ class SpaceEconomyAnalyzer:
                     percentiles = [5, 25, 50, 75, 95]
                     forecast_percentiles = np.percentile(forecast_paths, percentiles, axis=0)
                     
-                    forecast_index = pd.date_range(
-                        start=series.index[-1] + pd.DateOffset(years=1),
-                        periods=forecast_periods,
-                        freq='AS'
-                    )
+                    # Create explicit forecast years 2024-2030
+                    forecast_years = [2024, 2025, 2026, 2027, 2028, 2029, 2030]
+                    forecast_index = pd.to_datetime(forecast_years, format='%Y')
                     
                     gbm_results[series_name] = {
                         'mu': mu,
@@ -346,8 +415,16 @@ class SpaceEconomyAnalyzer:
                             index=forecast_index,
                             columns=[f'p{p}' for p in percentiles]
                         ),
-                        'last_value': S0
+                        'forecast_years': forecast_years,
+                        'last_value': S0,
+                        'last_observed_year': series.index[-1].year
                     }
+                    
+                    # Print GBM forecast summary
+                    print(f"    ✅ {series_name} GBM forecasts (median):")
+                    median_forecasts = forecast_percentiles[2]  # 50th percentile
+                    for year, value in zip(forecast_years, median_forecasts):
+                        print(f"       {year}: {value:,.0f}")
         
         self.gbm_results = gbm_results
         return gbm_results
@@ -410,83 +487,166 @@ class SpaceEconomyAnalyzer:
         """Create comprehensive visualizations"""
         print("\nCreating visualizations...")
         
+        # Check if we have any data to plot
+        if self.time_series.empty:
+            print("❌ No data available for visualization")
+            return
+        
+        # Filter out empty series
+        available_series = {}
+        for col in ['RealGrossOutput', 'Employment', 'Compensation', 'RealValueAdded']:
+            if col in self.time_series.columns:
+                series_data = self.time_series[col].dropna()
+                if len(series_data) > 0:
+                    available_series[col] = series_data
+        
+        if not available_series:
+            print("❌ No valid data series available for visualization")
+            return
+        
+        print(f"📊 Creating plots for: {list(available_series.keys())}")
+        
+        # Determine layout based on available plots
+        n_plots = 0
+        if available_series: n_plots += 1  # Time series overview
+        if hasattr(self, 'transformations') and available_series: n_plots += 1  # Growth rates
+        if hasattr(self, 'arima_results') and self.arima_results: n_plots += 1  # ARIMA
+        if hasattr(self, 'gbm_results') and self.gbm_results: n_plots += 1  # GBM
+        if hasattr(self, 'granger_results') and not self.granger_results.empty: n_plots += 1  # Granger
+        if hasattr(self, 'profit_results') and self.profit_results: n_plots += 1  # Profit
+        if hasattr(self, 'arima_results') and self.arima_results: n_plots += 1  # Residuals
+        if len(available_series) >= 2: n_plots += 1  # Correlation
+        
+        if n_plots == 0:
+            print("❌ No plots to generate")
+            return
+        
         # Set up the plotting layout
-        fig = plt.figure(figsize=(20, 24))
+        rows = max(2, (n_plots + 1) // 2)
+        fig = plt.figure(figsize=(20, 6 * rows))
+        plot_num = 1
         
-        # 1. Time series overview
-        plt.subplot(4, 2, 1)
-        for col in self.time_series.columns:
-            if col in ['RealGrossOutput', 'Employment', 'Compensation', 'RealValueAdded']:
-                plt.plot(self.time_series.index, self.time_series[col], marker='o', label=col, linewidth=2)
-        plt.title('Key Space Economy Indicators (2012-2023)', fontsize=14, fontweight='bold')
-        plt.xlabel('Year')
-        plt.ylabel('Value')
-        plt.legend()
-        plt.grid(True, alpha=0.3)
+        # 1. Time series overview (only if we have data)
+        if available_series:
+            plt.subplot(rows, 2, plot_num)
+            for col, series_data in available_series.items():
+                plt.plot(series_data.index, series_data, marker='o', label=col, linewidth=2)
+            plt.title('Key Space Economy Indicators (2012-2023)', fontsize=14, fontweight='bold')
+            plt.xlabel('Year')
+            plt.ylabel('Value')
+            plt.legend()
+            plt.grid(True, alpha=0.3)
+            plot_num += 1
         
-        # 2. Growth rates
-        plt.subplot(4, 2, 2)
-        for col in ['RealGrossOutput', 'Employment', 'Compensation']:
-            if f'{col}_pct_change' in self.transformations.columns:
-                growth = self.transformations[f'{col}_pct_change'].dropna() * 100
-                plt.plot(growth.index, growth, marker='s', label=f'{col} Growth %', linewidth=2)
-        plt.title('Annual Growth Rates', fontsize=14, fontweight='bold')
-        plt.xlabel('Year')
-        plt.ylabel('Growth Rate (%)')
-        plt.legend()
-        plt.grid(True, alpha=0.3)
-        plt.axhline(y=0, color='red', linestyle='--', alpha=0.5)
+        # 2. Growth rates (only if we have transformations and data)
+        if hasattr(self, 'transformations') and available_series:
+            growth_data = {}
+            for col in available_series.keys():
+                if f'{col}_pct_change' in self.transformations.columns:
+                    growth = self.transformations[f'{col}_pct_change'].dropna() * 100
+                    if len(growth) > 0:
+                        growth_data[col] = growth
+            
+            if growth_data:
+                plt.subplot(rows, 2, plot_num)
+                for col, growth in growth_data.items():
+                    plt.plot(growth.index, growth, marker='s', label=f'{col} Growth %', linewidth=2)
+                plt.title('Annual Growth Rates', fontsize=14, fontweight='bold')
+                plt.xlabel('Year')
+                plt.ylabel('Growth Rate (%)')
+                plt.legend()
+                plt.grid(True, alpha=0.3)
+                plt.axhline(y=0, color='red', linestyle='--', alpha=0.5)
+                plot_num += 1
         
-        # 3. ARIMA Forecasts
-        plt.subplot(4, 2, 3)
-        if hasattr(self, 'arima_results'):
-            for series_name, results in self.arima_results.items():
-                if series_name == 'RealGrossOutput':  # Focus on main series
-                    historical = self.time_series[series_name]
-                    forecast = results['forecast_mean']
-                    
-                    plt.plot(historical.index, historical, 'o-', label=f'{series_name} (Historical)', linewidth=2)
-                    plt.plot(forecast.index, forecast, 's--', label=f'{series_name} (ARIMA Forecast)', linewidth=2)
-                    
-                    # Add confidence interval
-                    ci = results['forecast_ci']
-                    plt.fill_between(forecast.index, ci.iloc[:, 0], ci.iloc[:, 1], alpha=0.2)
+        # 3. ARIMA Forecasts (only if we have ARIMA results)
+        if hasattr(self, 'arima_results') and self.arima_results:
+            # Find a series to display
+            arima_series = None
+            for series_name in ['RealGrossOutput', 'RealValueAdded', 'Compensation']:
+                if series_name in self.arima_results and series_name in available_series:
+                    arima_series = series_name
+                    break
+            
+            if arima_series:
+                plt.subplot(rows, 2, plot_num)
+                results = self.arima_results[arima_series]
+                historical = self.time_series[arima_series].dropna()
+                forecast = results['forecast_mean']
+                
+                plt.plot(historical.index, historical, 'o-', label=f'{arima_series} (Historical)', linewidth=2)
+                plt.plot(forecast.index, forecast, 's--', label=f'{arima_series} (ARIMA 2024-2030)', linewidth=2)
+                
+                # Add confidence interval
+                ci = results['forecast_ci']
+                plt.fill_between(forecast.index, ci['lower_ci'], ci['upper_ci'], alpha=0.2)
+                
+                # Add forecast year labels for key years
+                key_years = [2024, 2026, 2028, 2030]
+                for year in key_years:
+                    if year in results['forecast_years']:
+                        idx = results['forecast_years'].index(year)
+                        value = forecast.iloc[idx]
+                        plt.annotate(f'{year}\n{value:,.0f}', 
+                                   xy=(pd.to_datetime(str(year)), value),
+                                   xytext=(5, 5), textcoords='offset points',
+                                   fontsize=8, ha='left')
+                
+                plt.title(f'ARIMA Forecasts 2024-2030 - {arima_series}', fontsize=14, fontweight='bold')
+                plt.xlabel('Year')
+                plt.ylabel('Value (Millions)')
+                plt.legend()
+                plt.grid(True, alpha=0.3)
+                plot_num += 1
         
-        plt.title('ARIMA Forecasts - Real Gross Output', fontsize=14, fontweight='bold')
-        plt.xlabel('Year')
-        plt.ylabel('Value')
-        plt.legend()
-        plt.grid(True, alpha=0.3)
+        # 4. GBM Simulation Paths (only if we have GBM results)
+        if hasattr(self, 'gbm_results') and self.gbm_results:
+            # Find a series to display
+            gbm_series = None
+            for series_name in ['NominalGrossOutput', 'NominalValueAdded', 'Compensation']:
+                if series_name in self.gbm_results and series_name in available_series:
+                    gbm_series = series_name
+                    break
+            
+            if gbm_series:
+                plt.subplot(rows, 2, plot_num)
+                results = self.gbm_results[gbm_series]
+                historical = self.time_series[gbm_series].dropna()
+                percentiles = results['forecast_percentiles']
+                
+                plt.plot(historical.index, historical, 'o-', label=f'{gbm_series} (Historical)', linewidth=2)
+                
+                # Plot percentile bands
+                plt.plot(percentiles.index, percentiles['p50'], 's-', label='GBM Median (2024-2030)', linewidth=2)
+                plt.fill_between(percentiles.index, percentiles['p5'], percentiles['p95'], 
+                               alpha=0.2, label='90% Confidence Band')
+                plt.fill_between(percentiles.index, percentiles['p25'], percentiles['p75'], 
+                               alpha=0.3, label='50% Confidence Band')
+                
+                # Add forecast year labels for key years
+                key_years = [2024, 2026, 2028, 2030]
+                for year in key_years:
+                    if year in results['forecast_years']:
+                        idx = results['forecast_years'].index(year)
+                        value = percentiles['p50'].iloc[idx]
+                        plt.annotate(f'{year}\n{value:,.0f}', 
+                                   xy=(pd.to_datetime(str(year)), value),
+                                   xytext=(5, 5), textcoords='offset points',
+                                   fontsize=8, ha='left')
+                
+                plt.title(f'GBM Forecasts 2024-2030 - {gbm_series}', fontsize=14, fontweight='bold')
+                plt.xlabel('Year')
+                plt.ylabel('Value (Millions)')
+                plt.legend()
+                plt.grid(True, alpha=0.3)
+                plot_num += 1
         
-        # 4. GBM Simulation Paths
-        plt.subplot(4, 2, 4)
-        if hasattr(self, 'gbm_results'):
-            for series_name, results in self.gbm_results.items():
-                if series_name == 'NominalGrossOutput':  # Focus on main monetary series
-                    historical = self.time_series[series_name]
-                    percentiles = results['forecast_percentiles']
-                    
-                    plt.plot(historical.index, historical, 'o-', label=f'{series_name} (Historical)', linewidth=2)
-                    
-                    # Plot percentile bands
-                    plt.plot(percentiles.index, percentiles['p50'], 's-', label='GBM Median', linewidth=2)
-                    plt.fill_between(percentiles.index, percentiles['p5'], percentiles['p95'], 
-                                   alpha=0.2, label='90% Confidence Band')
-                    plt.fill_between(percentiles.index, percentiles['p25'], percentiles['p75'], 
-                                   alpha=0.3, label='50% Confidence Band')
-        
-        plt.title('GBM Forecasts - Nominal Gross Output', fontsize=14, fontweight='bold')
-        plt.xlabel('Year')
-        plt.ylabel('Value')
-        plt.legend()
-        plt.grid(True, alpha=0.3)
-        
-        # 5. Granger Causality Results
-        plt.subplot(4, 2, 5)
+        # 5. Granger Causality Results (only if significant results exist)
         if hasattr(self, 'granger_results') and not self.granger_results.empty:
             significant_results = self.granger_results[self.granger_results['Significant'] == True]
             
             if not significant_results.empty:
+                plt.subplot(rows, 2, plot_num)
                 relationships = significant_results['X_causes_Y'].str.replace('_dlog', '').str.replace(' → ', ' → ')
                 p_values = significant_results['p_value']
                 
@@ -503,47 +663,70 @@ class SpaceEconomyAnalyzer:
                     width = bar.get_width()
                     plt.text(width + 0.01, bar.get_y() + bar.get_height()/2, 
                             f'{p_values.iloc[i]:.3f}', ha='left', va='center')
+                
+                plt.grid(True, alpha=0.3)
+                plot_num += 1
         
-        plt.grid(True, alpha=0.3)
-        
-        # 6. Profit Analysis
-        plt.subplot(4, 2, 6)
-        if hasattr(self, 'profit_results'):
+        # 6. Profit Analysis (only if we have profit results)
+        if hasattr(self, 'profit_results') and self.profit_results:
+            plot_data = {}
             if 'labor_productivity' in self.profit_results:
-                prod_series = self.profit_results['labor_productivity']['series']
-                plt.plot(prod_series.index, prod_series, 'o-', label='Labor Productivity', linewidth=2, color='green')
-                
+                prod_series = self.profit_results['labor_productivity']['series'].dropna()
+                if len(prod_series) > 0:
+                    plot_data['Labor Productivity'] = (prod_series, 'green', 'o-')
+                    
             if 'profit_margin' in self.profit_results:
-                margin_series = self.profit_results['profit_margin']['series']
-                plt.plot(margin_series.index, margin_series * 100, 's-', label='Profit Margin %', linewidth=2, color='red')
+                margin_series = self.profit_results['profit_margin']['series'].dropna()
+                if len(margin_series) > 0:
+                    plot_data['Profit Margin %'] = (margin_series * 100, 'red', 's-')
+            
+            if plot_data:
+                plt.subplot(rows, 2, plot_num)
+                for label, (series, color, style) in plot_data.items():
+                    plt.plot(series.index, series, style, label=label, linewidth=2, color=color)
                 
-        plt.title('Productivity and Profitability Metrics', fontsize=14, fontweight='bold')
-        plt.xlabel('Year')
-        plt.ylabel('Value / Percentage')
-        plt.legend()
-        plt.grid(True, alpha=0.3)
+                plt.title('Productivity and Profitability Metrics', fontsize=14, fontweight='bold')
+                plt.xlabel('Year')
+                plt.ylabel('Value / Percentage')
+                plt.legend()
+                plt.grid(True, alpha=0.3)
+                plot_num += 1
         
-        # 7. Residual Analysis (ARIMA)
-        plt.subplot(4, 2, 7)
-        if hasattr(self, 'arima_results'):
-            for series_name, results in self.arima_results.items():
-                if series_name == 'RealGrossOutput':
-                    residuals = results['residuals']
-                    plt.plot(residuals.index, residuals, 'o-', alpha=0.7, label=f'{series_name} Residuals')
-                    break
+        # 7. Residual Analysis (only if we have ARIMA results)
+        if hasattr(self, 'arima_results') and self.arima_results:
+            # Find a series with residuals
+            residual_series = None
+            for series_name in ['RealGrossOutput', 'RealValueAdded', 'Compensation']:
+                if series_name in self.arima_results and 'residuals' in self.arima_results[series_name]:
+                    residuals = self.arima_results[series_name]['residuals'].dropna()
+                    if len(residuals) > 0:
+                        residual_series = (series_name, residuals)
+                        break
+            
+            if residual_series:
+                plt.subplot(rows, 2, plot_num)
+                series_name, residuals = residual_series
+                plt.plot(residuals.index, residuals, 'o-', alpha=0.7, label=f'{series_name} Residuals')
+                plt.title('ARIMA Model Residuals', fontsize=14, fontweight='bold')
+                plt.xlabel('Year')
+                plt.ylabel('Residuals')
+                plt.axhline(y=0, color='red', linestyle='--', alpha=0.5)
+                plt.legend()
+                plt.grid(True, alpha=0.3)
+                plot_num += 1
         
-        plt.title('ARIMA Model Residuals', fontsize=14, fontweight='bold')
-        plt.xlabel('Year')
-        plt.ylabel('Residuals')
-        plt.axhline(y=0, color='red', linestyle='--', alpha=0.5)
-        plt.grid(True, alpha=0.3)
-        
-        # 8. Correlation Heatmap
-        plt.subplot(4, 2, 8)
-        correlation_data = self.time_series[['RealGrossOutput', 'Employment', 'Compensation', 'RealValueAdded']].corr()
-        sns.heatmap(correlation_data, annot=True, cmap='coolwarm', center=0, 
-                   square=True, cbar_kws={'label': 'Correlation'})
-        plt.title('Correlation Matrix - Key Indicators', fontsize=14, fontweight='bold')
+        # 8. Correlation Heatmap (only if we have at least 2 series)
+        if len(available_series) >= 2:
+            plt.subplot(rows, 2, plot_num)
+            # Create correlation matrix only for available series
+            correlation_series = list(available_series.keys())
+            correlation_data = self.time_series[correlation_series].corr()
+            
+            import seaborn as sns
+            sns.heatmap(correlation_data, annot=True, cmap='coolwarm', center=0, 
+                       square=True, cbar_kws={'label': 'Correlation'})
+            plt.title('Correlation Matrix - Available Indicators', fontsize=14, fontweight='bold')
+            plot_num += 1
         
         plt.tight_layout()
         plt.savefig('space_economy_comprehensive_analysis.png', dpi=300, bbox_inches='tight')
@@ -583,9 +766,27 @@ class SpaceEconomyAnalyzer:
                 print("   • No significant causal relationships found at 10% level")
         
         if hasattr(self, 'arima_results'):
-            print(f"\n📊 ARIMA MODELS:")
+            print(f"\n📊 ARIMA MODELS (2024-2030 FORECASTS):")
             for series_name, results in self.arima_results.items():
                 print(f"   • {series_name}: ARIMA{results['order']} (AIC: {results['aic']:.1f})")
+                if 'forecast_years' in results:
+                    forecast_mean = results['forecast_mean']
+                    print(f"     - 2024: {forecast_mean.iloc[0]:,.0f}")
+                    print(f"     - 2030: {forecast_mean.iloc[-1]:,.0f}")
+                    growth_rate = (forecast_mean.iloc[-1] / results['last_observed_value']) ** (1/7) - 1
+                    print(f"     - Implied annual growth (2023-2030): {growth_rate*100:.1f}%")
+        
+        if hasattr(self, 'gbm_results'):
+            print(f"\n📈 GBM MODELS (2024-2030 FORECASTS):")
+            for series_name, results in self.gbm_results.items():
+                print(f"   • {series_name}:")
+                print(f"     - Annual drift (μ): {results['mu']*100:.2f}%")
+                print(f"     - Annual volatility (σ): {results['sigma']*100:.2f}%")
+                if 'forecast_percentiles' in results:
+                    p50_2024 = results['forecast_percentiles']['p50'].iloc[0]
+                    p50_2030 = results['forecast_percentiles']['p50'].iloc[-1]
+                    print(f"     - 2024 median forecast: {p50_2024:,.0f}")
+                    print(f"     - 2030 median forecast: {p50_2030:,.0f}")
         
         if hasattr(self, 'profit_results'):
             print(f"\n💰 PROFITABILITY INSIGHTS:")
@@ -602,7 +803,9 @@ class SpaceEconomyAnalyzer:
         print(f"\n🔮 FORECASTING:")
         print(f"   • ARIMA models fitted for key economic indicators")
         print(f"   • GBM models for monetary series with Monte Carlo simulation") 
-        print(f"   • 5-year forward projections generated")
+        print(f"   • 7-year projections: 2024, 2025, 2026, 2027, 2028, 2029, 2030")
+        print(f"   • Forecasts start from last observed data point (2023)")
+        print(f"   • Confidence intervals provided for uncertainty quantification")
         
         print("\n" + "="*60)
 
