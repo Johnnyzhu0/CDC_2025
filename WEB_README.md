@@ -23,34 +23,24 @@ This web interface provides an interactive visualization of U.S. Space Economy d
 1. **ARIMA Forecasts**: Statistical predictions for Economic Indicators (Real Value Added, Real Gross Output, Employment)
 2. **GBM Monte Carlo Simulations**: Stochastic forecasts for Nominal indicators (Nominal Value Added, Nominal Gross Output)
 
-### 📈 Key Features
+### Key Features
 - **Historical Interactivity**: Use slider and animation to explore 2012-2023 data
 - **Forecast Overview**: Static display of complete ARIMA and GBM forecasts through 2030
 - **Chart Focus Mode**: Dropdown to view one historical chart at a time for detailed analysis
 - **Model Separation**: ARIMA for conservative statistical forecasts, GBM for stochastic projections
 
-### 📈 Real-time Stats Display
+### Real-time Stats Display
 - Current year's key metrics
 - Real Value Added, Employment, Compensation
 - Productivity per worker calculations
 
-## How to Use
-
-1. **Start the local server**:
-   ```bash
-   cd /Users/inori/IdeaProjects/CDC_2025
-   python3 -m http.server 8002
-   ```
-
-2. **Open in browser**: Navigate to `http://localhost:8002`
-
-3. **Explore the data**:
+### Explore the data**:
    - **Historical Analysis**: Use the year slider (2012-2023) to interactively explore actual trends
    - **Chart Selection**: Choose specific charts from the dropdown for focused analysis
    - **Animation**: Click "Play Animation" to watch the historical timeline unfold
    - **Forecasting**: View complete ARIMA and GBM predictions in the dedicated forecasting section
 
-4. **Navigation Tips**:
+### Navigation Tips**:
    - **All Charts**: Grid view showing all historical visualizations simultaneously
    - **Individual Focus**: Select specific charts for larger, detailed view
    - **Static Forecasts**: Forecasting section shows complete predictions (not interactive)
@@ -61,12 +51,6 @@ This web interface provides an interactive visualization of U.S. Space Economy d
 - `web_export.py`: Exports analysis results to JSON format
 - `space_economy_data.json`: Contains all economic data and calculations
 - Real-time chart updates using Chart.js library
-
-### Interactive Features
-- **Smooth Animations**: Charts update without flickering
-- **Responsive Design**: Works on desktop and tablet devices
-- **Dual-axis Charts**: Labor market shows employment and compensation simultaneously
-- **Progressive Data Display**: Only shows data up to selected year
 
 ## Key Insights to Explore
 
@@ -96,11 +80,3 @@ This web interface provides an interactive visualization of U.S. Space Economy d
 └── main.py                 # Original analysis code
 ```
 
-## Browser Compatibility
-
-- Chrome/Edge: Full support
-- Firefox: Full support  
-- Safari: Full support
-- Mobile browsers: Responsive design
-
-The interface leverages Chart.js for smooth, professional visualizations and provides an engaging way to explore the space economy dataset interactively.
