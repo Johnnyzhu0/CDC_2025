@@ -44,6 +44,69 @@ class SpaceEconomyApp {
         }
     }
     
+    convertCompactFormat() {
+        // Convert compact horizontal format to expected nested structure
+        this.data.data = {
+            economic_output: {
+                real_value_added: this.data.economic.real_value_added,
+                nominal_value_added: this.data.economic.nominal_value_added,
+                real_gross_output: this.data.economic.real_gross_output,
+                nominal_gross_output: this.data.economic.nominal_gross_output
+            },
+            labor_market: {
+                employment: this.data.labor.employment,
+                compensation: this.data.labor.compensation
+            }
+        };
+        
+        // Convert forecast data if present
+        if (this.data.arima || this.data.gbm) {
+            this.data.forecasts = {};
+            
+            if (this.data.arima) {
+                this.data.forecasts.arima = {};
+                // Map compact keys to expected format
+                const arimaKeyMap = {
+                    'realgrossoutput': 'real_gross_output',
+                    'realvalueadded': 'real_value_added', 
+                    'employment': 'employment',
+                    'compensation': 'compensation'
+                };
+                
+                Object.keys(this.data.arima).forEach(compactKey => {
+                    const mappedKey = arimaKeyMap[compactKey] || compactKey;
+                    this.data.forecasts.arima[mappedKey] = {
+                        forecast_mean: this.data.arima[compactKey]
+                    };
+                });
+            }
+            
+            if (this.data.gbm) {
+                this.data.forecasts.gbm = {};
+                // Map compact keys to expected format
+                const gbmKeyMap = {
+                    'nominalgrossoutput': 'nominal_gross_output',
+                    'nominalvalueadded': 'nominal_value_added',
+                    'compensation': 'compensation'
+                };
+                
+                Object.keys(this.data.gbm).forEach(compactKey => {
+                    const mappedKey = gbmKeyMap[compactKey] || compactKey;
+                    this.data.forecasts.gbm[mappedKey] = {
+                        forecast_mean: this.data.gbm[compactKey]
+                    };
+                });
+            }
+        }
+        
+        // Also add all_years if it doesn't exist
+        if (!this.data.all_years && this.data.years) {
+            this.data.all_years = [...this.data.years, 2024, 2025, 2026, 2027, 2028, 2029, 2030];
+        }
+        
+        console.log('Converted data structure:', this.data);
+    }
+    
     createSampleData() {
         // Fallback sample data for testing
         this.data = {
@@ -530,21 +593,21 @@ class SpaceEconomyApp {
             this.forecastCharts.arima.data.labels = allYears;
             
             // Real Value Added
-            const realValueAdded = this.data.forecasts.arima.realvalueadded;
-            if (realValueAdded) {
-                this.forecastCharts.arima.data.datasets[0].data = realValueAdded.data;
+            const realValueAdded = this.data.forecasts.arima.real_value_added;
+            if (realValueAdded && realValueAdded.forecast_mean) {
+                this.forecastCharts.arima.data.datasets[0].data = realValueAdded.forecast_mean;
             }
             
             // Real Gross Output  
-            const realGrossOutput = this.data.forecasts.arima.realgrossoutput;
-            if (realGrossOutput) {
-                this.forecastCharts.arima.data.datasets[1].data = realGrossOutput.data;
+            const realGrossOutput = this.data.forecasts.arima.real_gross_output;
+            if (realGrossOutput && realGrossOutput.forecast_mean) {
+                this.forecastCharts.arima.data.datasets[1].data = realGrossOutput.forecast_mean;
             }
             
             // Employment
             const employment = this.data.forecasts.arima.employment;
-            if (employment) {
-                this.forecastCharts.arima.data.datasets[2].data = employment.data;
+            if (employment && employment.forecast_mean) {
+                this.forecastCharts.arima.data.datasets[2].data = employment.forecast_mean;
             }
             
             this.forecastCharts.arima.update('none');
@@ -555,15 +618,15 @@ class SpaceEconomyApp {
             this.forecastCharts.gbm.data.labels = allYears;
             
             // Nominal Value Added
-            const nominalValueAdded = this.data.forecasts.gbm.nominalvalueadded;
-            if (nominalValueAdded) {
-                this.forecastCharts.gbm.data.datasets[0].data = nominalValueAdded.data;
+            const nominalValueAdded = this.data.forecasts.gbm.nominal_value_added;
+            if (nominalValueAdded && nominalValueAdded.forecast_mean) {
+                this.forecastCharts.gbm.data.datasets[0].data = nominalValueAdded.forecast_mean;
             }
             
             // Nominal Gross Output
-            const nominalGrossOutput = this.data.forecasts.gbm.nominalgrossoutput;
-            if (nominalGrossOutput) {
-                this.forecastCharts.gbm.data.datasets[1].data = nominalGrossOutput.data;
+            const nominalGrossOutput = this.data.forecasts.gbm.nominal_gross_output;
+            if (nominalGrossOutput && nominalGrossOutput.forecast_mean) {
+                this.forecastCharts.gbm.data.datasets[1].data = nominalGrossOutput.forecast_mean;
             }
             
             this.forecastCharts.gbm.update('none');
