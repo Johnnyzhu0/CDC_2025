@@ -416,19 +416,24 @@ class SpaceEconomyAnalyzer:
                 'volatility': comp_growth.std()
             }
         
-        # Profit margin proxy (if we have both output and compensation)
+        # Labor cost ratio (if we have both output and compensation)
         if 'RealGrossOutput' in self.time_series.columns and 'Compensation' in self.time_series.columns:
-            # Simple profit margin approximation
-            profit_margin = (self.time_series['RealGrossOutput'] - self.time_series['Compensation']) / self.time_series['RealGrossOutput']
-            profit_margin.name = 'ProfitMargin'
+            # Calculate labor cost as percentage of total output
+            # This shows what percentage of revenue goes to labor compensation
+            real_output = self.time_series['RealGrossOutput']
+            compensation = self.time_series['Compensation']
             
-            margin_change = profit_margin.diff()
+            # Calculate labor cost ratio (compensation / output)
+            labor_cost_ratio = compensation / real_output
+            labor_cost_ratio.name = 'LaborCostRatio'
+            
+            ratio_change = labor_cost_ratio.diff()
             
             profit_results['profit_margin'] = {
-                'series': profit_margin,
-                'change': margin_change,
-                'avg_margin': profit_margin.mean(),
-                'trend': stats.linregress(range(len(profit_margin.dropna())), profit_margin.dropna()).slope
+                'series': labor_cost_ratio,  # Keep same key for compatibility
+                'change': ratio_change,
+                'avg_margin': labor_cost_ratio.mean(),
+                'trend': stats.linregress(range(len(labor_cost_ratio.dropna())), labor_cost_ratio.dropna()).slope
             }
         
         self.profit_results = profit_results
@@ -460,10 +465,10 @@ class SpaceEconomyAnalyzer:
         # Determine layout based on available plots
         n_plots = 0
         if available_series: n_plots += 2  # Time series overview (now split into 2 plots)
-        if hasattr(self, 'transformations') and available_series: n_plots += 1  # Growth rates
+        if hasattr(self, 'transformations') and available_series: n_plots += 2  # Growth rates (now split into 2 plots)
         if hasattr(self, 'arima_results') and self.arima_results: n_plots += 1  # ARIMA
         if hasattr(self, 'gbm_results') and self.gbm_results: n_plots += 1  # GBM
-        if hasattr(self, 'profit_results') and self.profit_results: n_plots += 1  # Profit
+        if hasattr(self, 'profit_results') and self.profit_results: n_plots += 2  # Profit (now split into 2 plots)
         if hasattr(self, 'arima_results') and self.arima_results: n_plots += 1  # Residuals
         if len(available_series) >= 2: n_plots += 1  # Correlation
         
@@ -512,11 +517,11 @@ class SpaceEconomyAnalyzer:
                 plt.grid(True, alpha=0.3)
                 plot_num += 1
         
-        # 3. Growth rates (only if we have transformations and data)
+        # 3. Economic Indicators Growth Rates (excluding Compensation)
         if hasattr(self, 'transformations') and available_series:
             growth_data = {}
             for col in available_series.keys():
-                if f'{col}_pct_change' in self.transformations.columns:
+                if col != 'Compensation' and f'{col}_pct_change' in self.transformations.columns:
                     growth = self.transformations[f'{col}_pct_change'].dropna() * 100
                     if len(growth) > 0:
                         growth_data[col] = growth
@@ -524,8 +529,8 @@ class SpaceEconomyAnalyzer:
             if growth_data:
                 plt.subplot(rows, 2, plot_num)
                 for col, growth in growth_data.items():
-                    plt.plot(growth.index, growth, marker='s', label=f'{col} Growth %', linewidth=2)
-                plt.title('Annual Growth Rates', fontsize=14, fontweight='bold')
+                    plt.plot(growth.index, growth, marker='o', label=f'{col} Growth %', linewidth=2)
+                plt.title('Economic Indicators Growth Rates', fontsize=14, fontweight='bold')
                 plt.xlabel('Year')
                 plt.ylabel('Growth Rate (%)')
                 plt.legend()
@@ -533,7 +538,28 @@ class SpaceEconomyAnalyzer:
                 plt.axhline(y=0, color='red', linestyle='--', alpha=0.5)
                 plot_num += 1
         
-        # 4. ARIMA Forecasts (only if we have ARIMA results)
+        # 4. Compensation Growth Rate (separate due to high volatility)
+        if hasattr(self, 'transformations') and 'Compensation' in available_series:
+            if 'Compensation_pct_change' in self.transformations.columns:
+                comp_growth = self.transformations['Compensation_pct_change'].dropna() * 100
+                if len(comp_growth) > 0:
+                    plt.subplot(rows, 2, plot_num)
+                    plt.plot(comp_growth.index, comp_growth, marker='s', label='Compensation Growth %', 
+                            linewidth=2, color='orange', markersize=6)
+                    plt.title('Compensation Growth Rate', fontsize=14, fontweight='bold')
+                    plt.xlabel('Year')
+                    plt.ylabel('Growth Rate (%)')
+                    plt.legend()
+                    plt.grid(True, alpha=0.3)
+                    plt.axhline(y=0, color='red', linestyle='--', alpha=0.5)
+                    # Add mean line for reference
+                    mean_growth = comp_growth.mean()
+                    plt.axhline(y=mean_growth, color='blue', linestyle=':', alpha=0.7, 
+                              label=f'Mean: {mean_growth:.1f}%')
+                    plt.legend()
+                    plot_num += 1
+        
+        # 5. ARIMA Forecasts (only if we have ARIMA results)
         if hasattr(self, 'arima_results') and self.arima_results:
             # Find a series to display
             arima_series = None
@@ -573,7 +599,7 @@ class SpaceEconomyAnalyzer:
                 plt.grid(True, alpha=0.3)
                 plot_num += 1
         
-        # 5. GBM Simulation Paths (only if we have GBM results)
+        # 6. GBM Simulation Paths (only if we have GBM results)
         if hasattr(self, 'gbm_results') and self.gbm_results:
             # Find a series to display
             gbm_series = None
@@ -615,32 +641,39 @@ class SpaceEconomyAnalyzer:
                 plt.grid(True, alpha=0.3)
                 plot_num += 1
         
-        # 6. Profit Analysis (only if we have profit results)
+        # 7. Labor Productivity Analysis (only if we have profit results)
         if hasattr(self, 'profit_results') and self.profit_results:
-            plot_data = {}
             if 'labor_productivity' in self.profit_results:
                 prod_series = self.profit_results['labor_productivity']['series'].dropna()
                 if len(prod_series) > 0:
-                    plot_data['Labor Productivity'] = (prod_series, 'green', 'o-')
-                    
+                    plt.subplot(rows, 2, plot_num)
+                    plt.plot(prod_series.index, prod_series, 'o-', label='Labor Productivity', 
+                            linewidth=2, color='green', markersize=6)
+                    plt.title('Labor Productivity Analysis', fontsize=14, fontweight='bold')
+                    plt.xlabel('Year')
+                    plt.ylabel('Output per Worker')
+                    plt.legend()
+                    plt.grid(True, alpha=0.3)
+                    plot_num += 1
+        
+        # 8. Labor Cost Ratio Analysis (only if we have profit results)
+        if hasattr(self, 'profit_results') and self.profit_results:
             if 'profit_margin' in self.profit_results:
                 margin_series = self.profit_results['profit_margin']['series'].dropna()
                 if len(margin_series) > 0:
-                    plot_data['Profit Margin %'] = (margin_series * 100, 'red', 's-')
-            
-            if plot_data:
-                plt.subplot(rows, 2, plot_num)
-                for label, (series, color, style) in plot_data.items():
-                    plt.plot(series.index, series, style, label=label, linewidth=2, color=color)
-                
-                plt.title('Productivity and Profitability Metrics', fontsize=14, fontweight='bold')
-                plt.xlabel('Year')
-                plt.ylabel('Value / Percentage')
-                plt.legend()
-                plt.grid(True, alpha=0.3)
-                plot_num += 1
+                    plt.subplot(rows, 2, plot_num)
+                    plt.plot(margin_series.index, margin_series * 100, 's-', label='Labor Cost Ratio %', 
+                            linewidth=2, color='red', markersize=6)
+                    plt.title('Labor Cost Ratio Analysis', fontsize=14, fontweight='bold')
+                    plt.xlabel('Year')
+                    plt.ylabel('Labor Cost as % of Output')
+                    plt.legend()
+                    plt.grid(True, alpha=0.3)
+                    # Add a horizontal line at 0% for reference
+                    plt.axhline(y=0, color='black', linestyle='--', alpha=0.5)
+                    plot_num += 1
         
-        # 7. Residual Analysis (only if we have ARIMA results)
+        # 9. Residual Analysis (only if we have ARIMA results)
         if hasattr(self, 'arima_results') and self.arima_results:
             # Find a series with residuals
             residual_series = None
@@ -665,7 +698,7 @@ class SpaceEconomyAnalyzer:
                 plt.grid(True, alpha=0.3)
                 plot_num += 1
         
-        # 8. Correlation Heatmap (only if we have at least 2 series)
+        # 10. Correlation Heatmap (only if we have at least 2 series)
         if len(available_series) >= 2:
             plt.subplot(rows, 2, plot_num)
             # Create correlation matrix only for available series
@@ -735,10 +768,10 @@ class SpaceEconomyAnalyzer:
                 print(f"   • Labor productivity growth: {avg_growth:.2f}% annually")
             
             if 'profit_margin' in self.profit_results:
-                avg_margin = self.profit_results['profit_margin']['avg_margin'] * 100
+                avg_ratio = self.profit_results['profit_margin']['avg_margin'] * 100
                 trend = self.profit_results['profit_margin']['trend'] * 100
-                print(f"   • Average profit margin: {avg_margin:.1f}%")
-                print(f"   • Profit margin trend: {trend:+.2f}% per year")
+                print(f"   • Average labor cost ratio: {avg_ratio:.1f}% of output")
+                print(f"   • Labor cost ratio trend: {trend:+.2f}% per year")
         
         print(f"\n🔮 FORECASTING:")
         print(f"   • ARIMA models fitted for key economic indicators")

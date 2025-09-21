@@ -23,18 +23,11 @@ The analysis uses data from Business.xlsx containing 8 tables of space economy i
 ### 2. **Geometric Brownian Motion (GBM)**
 **Purpose**: Stochastic modeling for financial/economic forecasting
 - **Input**: Historical returns and volatility
-- **Output**: Monte Carlo simulations with percentile bands (5th, 25th, 50th, 75th, 95th)
+- **Output**: Monte Carlo simulations with percentile bands (50%, 90%)
 - **What it models**: Random walk behavior with drift and volatility
 - **Use case**: Risk assessment and probabilistic forecasting
 
-### 3. **Granger Causality Tests**
-**Purpose**: Identify causal relationships between economic indicators
-- **Input**: Multiple time series (differenced to ensure stationarity)
-- **Output**: Statistical significance of X causing Y relationships
-- **What it models**: Whether past values of one variable help predict another
-- **Use case**: Understanding economic interdependencies
-
-### 4. **Profit & Productivity Analysis**
+### 3. **Profit & Productivity Analysis**
 **Purpose**: Calculate economic efficiency metrics
 - **Input**: Value Added, Employment, Compensation data
 - **Output**: Labor productivity and profit margin calculations
@@ -43,50 +36,66 @@ The analysis uses data from Business.xlsx containing 8 tables of space economy i
 
 ## 📈 Visualizations Guide
 
-### 1. **Time Series Overview**
-Shows historical trends of key indicators from 2012-2023
-- **Red lines**: Major economic indicators
-- **Markers**: Data points for each year
+### 1. **Economic Output Indicators**
+Shows historical trends of RealGrossOutput and RealValueAdded from 2012-2023
+- **Circle markers**: Economic output metrics in millions
+- **Separate scaling**: Optimized for large-value economic indicators
 
-### 2. **Annual Growth Rates**
-Displays year-over-year percentage changes
+### 2. **Labor Market Indicators**
+Shows historical trends of Employment and Compensation from 2012-2023
+- **Square markers**: Labor market metrics
+- **Separate scaling**: Optimized for employment and compensation values
+
+### 3. **Economic Indicators Growth Rates**
+Displays year-over-year percentage changes for all indicators EXCEPT Compensation
+- **Circle markers**: Economic growth rates with stable scaling
 - **Positive values**: Growth periods
 - **Negative values**: Decline periods
 - **Red dashed line**: Zero growth reference
+- **Clean visualization**: Without compensation's high volatility
 
-### 3. **ARIMA Forecasts (2024-2030)**
+### 4. **Compensation Growth Rate**
+Dedicated chart for compensation growth rate (separated due to high volatility)
+- **Square markers**: Orange color for distinction
+- **Separate scaling**: Handles extreme swings (-50% to +200%)
+- **Blue dotted line**: Mean growth rate reference
+- **High volatility**: Shows 70.29% standard deviation in growth
+
+### 5. **ARIMA Forecasts (2024-2030)**
 Shows model predictions with uncertainty bands
 - **Solid line**: Historical data
 - **Dashed line**: ARIMA forecasts
 - **Shaded area**: Confidence intervals
 - **Annotations**: Key forecast years and values
 
-### 4. **GBM Simulation Paths**
+### 6. **GBM Simulation Paths**
 Displays probabilistic forecasts from Monte Carlo simulations
 - **Solid line**: Historical data
 - **Central line**: Median forecast (50th percentile)
 - **Light shading**: 90% confidence band (5th-95th percentiles)
 - **Dark shading**: 50% confidence band (25th-75th percentiles)
 
-### 5. **Granger Causality Results**
-Bar chart showing significant causal relationships
-- **Bar length**: Strength of statistical significance (-log10 p-value)
-- **Red line**: 5% significance threshold
-- **Orange line**: 10% significance threshold
-- **Labels**: p-values for each relationship
-
-### 6. **Productivity & Profitability Metrics**
+### 7. **Labor Productivity Analysis**
 Tracks economic efficiency over time
-- **Green line**: Labor productivity (output per worker)
-- **Red line**: Profit margins (percentage)
+- **Green line with circles**: Labor productivity (output per worker)
+- **Dedicated scaling**: Optimized for productivity values
+- **Trend analysis**: Shows 4.63% annual growth
 
-### 7. **ARIMA Model Residuals**
-Shows model fit quality and assumptions
-- **Points**: Residual values (actual - predicted)
+### 8. **Labor Cost Ratio Analysis**
+Shows labor compensation as percentage of total output
+- **Red line with squares**: Labor cost ratio (formerly "profit margin")
+- **Corrected calculation**: Compensation / Output ratio
+- **Economic interpretation**: 0.2% average ratio (highly capital-intensive sector)
+- **Black dashed line**: Zero reference
+
+### 9. **ARIMA Model Residuals (Outlier Removed)**
+Shows model fit quality and assumptions with 2012 outlier excluded
+- **Points**: Residual values (actual - predicted) from 2013-2023
 - **Red dashed line**: Zero reference
 - **Pattern**: Random scatter indicates good model fit
+- **Improvement**: 2012 outlier removed for cleaner analysis
 
-### 8. **Correlation Matrix Heatmap**
+### 10. **Correlation Matrix Heatmap**
 **🔴 Red colors**: **Positive correlations**
 - Darker red = stronger positive correlation (closer to +1.0)
 - When one variable increases, the other tends to increase
@@ -115,6 +124,24 @@ pip install pandas openpyxl matplotlib seaborn statsmodels scipy
 python main.py
 ```
 
+## 🔄 Recent Improvements
+
+### Version Updates (September 2025)
+- **✅ Removed Granger Causality Analysis**: Eliminated problematic causality testing due to small sample size limitations
+- **✅ Enhanced Visualization Structure**: Split analysis into 10 focused plots:
+  - Economic Output Indicators (RealGrossOutput, RealValueAdded)
+  - Labor Market Indicators (Employment, Compensation)
+  - Economic Indicators Growth Rates (excluding Compensation)
+  - Compensation Growth Rate (separate chart for high volatility)
+  - Labor Productivity Analysis (dedicated chart)
+  - Labor Cost Ratio Analysis (dedicated chart)
+- **✅ Improved Model Diagnostics**: Excluded 2012 outlier from ARIMA residual analysis for cleaner model assessment
+- **✅ Fixed Economic Calculations**: Corrected "profit margin" to meaningful "labor cost ratio" (0.2% vs. misleading 99.8%)
+- **✅ Better Visual Organization**: 
+  - Optimized plot scaling for different data types and volatility levels
+  - Separated high-volatility compensation growth from stable economic indicators
+  - Added reference lines (mean, zero) for better context
+
 ## 📁 Project Structure
 
 ```
@@ -130,11 +157,13 @@ CDC_2025/
 ## 📊 Key Findings
 
 The analysis provides insights into:
-- **Growth trends** in the U.S. space economy
-- **Forecasted values** for 2024-2030 using multiple methodologies
-- **Causal relationships** between economic indicators
+- **Growth trends** in the U.S. space economy with separated visualization for stable vs. volatile indicators
+- **Forecasted values** for 2024-2030 using multiple methodologies (ARIMA & GBM)
 - **Risk assessments** through probabilistic modeling
-- **Productivity trends** and economic efficiency
+- **Labor productivity trends** showing 4.63% annual growth
+- **Labor cost efficiency** revealing 0.2% labor cost ratio (highly capital-intensive sector)
+- **Compensation volatility** with 70.29% standard deviation requiring separate analysis
+- **Improved model diagnostics** with outlier handling and dedicated residual analysis
 
 ---
 *Carolina Data Challenge 2025* 🗣️
