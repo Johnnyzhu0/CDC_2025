@@ -256,6 +256,18 @@ class SpaceEconomyApp {
                 plugins: {
                     legend: {
                         position: 'top'
+                    },
+                    tooltip: {
+                        callbacks: {
+                            label: function(context) {
+                                const value = context.parsed.y;
+                                if (value >= 1000) {
+                                    return context.dataset.label + ': $' + (value/1000).toFixed(1) + 'B';
+                                } else {
+                                    return context.dataset.label + ': $' + value.toLocaleString() + 'M';
+                                }
+                            }
+                        }
                     }
                 }
             }
@@ -315,6 +327,19 @@ class SpaceEconomyApp {
                 plugins: {
                     legend: {
                         position: 'top'
+                    },
+                    tooltip: {
+                        callbacks: {
+                            label: function(context) {
+                                const value = context.parsed.y;
+                                if (context.dataset.label.includes('Employment')) {
+                                    return context.dataset.label + ': ' + value.toLocaleString() + ' thousand workers';
+                                } else if (context.dataset.label.includes('Compensation')) {
+                                    return context.dataset.label + ': $' + value.toLocaleString() + 'M';
+                                }
+                                return context.dataset.label + ': ' + value.toLocaleString();
+                            }
+                        }
                     }
                 }
             }
@@ -355,6 +380,14 @@ class SpaceEconomyApp {
                 plugins: {
                     legend: {
                         position: 'top'
+                    },
+                    tooltip: {
+                        callbacks: {
+                            label: function(context) {
+                                const value = context.parsed.y;
+                                return context.dataset.label + ': ' + value.toFixed(2) + '%';
+                            }
+                        }
                     }
                 }
             }
@@ -390,6 +423,14 @@ class SpaceEconomyApp {
                 plugins: {
                     legend: {
                         position: 'top'
+                    },
+                    tooltip: {
+                        callbacks: {
+                            label: function(context) {
+                                const value = context.parsed.y;
+                                return context.dataset.label + ': ' + value.toLocaleString() + ' (index)';
+                            }
+                        }
                     }
                 }
             }
@@ -467,6 +508,22 @@ class SpaceEconomyApp {
                 plugins: {
                     legend: {
                         position: 'top'
+                    },
+                    tooltip: {
+                        callbacks: {
+                            label: function(context) {
+                                const value = context.parsed.y;
+                                if (context.dataset.label.includes('Employment')) {
+                                    return context.dataset.label + ': ' + value.toLocaleString() + ' thousand workers';
+                                } else {
+                                    if (value >= 1000) {
+                                        return context.dataset.label + ': $' + (value/1000).toFixed(1) + 'B';
+                                    } else {
+                                        return context.dataset.label + ': $' + value.toLocaleString() + 'M';
+                                    }
+                                }
+                            }
+                        }
                     }
                 }
             }
@@ -517,6 +574,18 @@ class SpaceEconomyApp {
                 plugins: {
                     legend: {
                         position: 'top'
+                    },
+                    tooltip: {
+                        callbacks: {
+                            label: function(context) {
+                                const value = context.parsed.y;
+                                if (value >= 1000) {
+                                    return context.dataset.label + ': $' + (value/1000).toFixed(1) + 'B';
+                                } else {
+                                    return context.dataset.label + ': $' + value.toLocaleString() + 'M';
+                                }
+                            }
+                        }
                     }
                 }
             }
