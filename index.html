@@ -1,0 +1,312 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Interactive Space Economy Analysis</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        body {
+            font-family: 'Arial', sans-serif;
+            margin: 0;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 10px;
+            box-shadow: 0 2px 20px rgba(0,0,0,0.1);
+            padding: 30px;
+        }
+        
+        .header {
+            text-align: center;
+            margin-bottom: 30px;
+        }
+        
+        .header h1 {
+            color: #2c3e50;
+            margin-bottom: 10px;
+        }
+        
+        .controls {
+            background: #ecf0f1;
+            padding: 20px;
+            border-radius: 8px;
+            margin-bottom: 30px;
+            text-align: center;
+        }
+        
+        .chart-selector {
+            margin: 20px 0;
+            padding: 15px;
+            background: white;
+            border-radius: 5px;
+            border: 1px solid #bdc3c7;
+        }
+        
+        .chart-selector label {
+            font-weight: bold;
+            color: #34495e;
+            margin-right: 15px;
+        }
+        
+        .chart-selector select {
+            padding: 8px 15px;
+            border-radius: 4px;
+            border: 1px solid #bdc3c7;
+            font-size: 16px;
+            min-width: 200px;
+        }
+        
+        .slider-container {
+            margin: 20px 0;
+        }
+        
+        .slider-container label {
+            display: block;
+            margin-bottom: 10px;
+            font-weight: bold;
+            color: #34495e;
+        }
+        
+        .year-slider {
+            width: 100%;
+            max-width: 600px;
+            margin: 0 auto;
+            display: block;
+        }
+        
+        .year-display {
+            font-size: 24px;
+            font-weight: bold;
+            color: #e74c3c;
+            margin: 15px 0;
+        }
+        
+        .chart-grid {
+            display: grid;
+            grid-template-columns: 1fr;
+            gap: 30px;
+            margin-top: 30px;
+        }
+        
+        .chart-grid.multi-view {
+            grid-template-columns: repeat(auto-fit, minmax(600px, 1fr));
+        }
+        
+        .section-header {
+            background: #34495e;
+            color: white;
+            padding: 15px 20px;
+            border-radius: 8px 8px 0 0;
+            margin: 30px 0 0 0;
+            font-size: 20px;
+            font-weight: bold;
+        }
+        
+        .section-content {
+            background: white;
+            border: 1px solid #34495e;
+            border-radius: 0 0 8px 8px;
+            margin: 0 0 30px 0;
+            padding: 20px;
+        }
+        
+        .chart-container {
+            background: white;
+            border: 1px solid #ddd;
+            border-radius: 8px;
+            padding: 20px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.05);
+            min-height: 500px;
+        }
+        
+        .chart-title {
+            text-align: center;
+            font-size: 18px;
+            font-weight: bold;
+            color: #2c3e50;
+            margin-bottom: 15px;
+        }
+        
+        .chart-canvas {
+            width: 100% !important;
+            height: 450px !important;
+        }
+        
+        .hidden {
+            display: none !important;
+        }
+        
+        .forecast-indicator {
+            background: #f39c12;
+            color: white;
+            padding: 5px 10px;
+            border-radius: 3px;
+            font-size: 12px;
+            margin-left: 10px;
+        }
+        
+        .play-controls {
+            margin: 20px 0;
+        }
+        
+        .play-btn, .reset-btn {
+            background: #3498db;
+            color: white;
+            border: none;
+            padding: 12px 25px;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 16px;
+            margin: 0 10px;
+            transition: background 0.3s;
+        }
+        
+        .play-btn:hover, .reset-btn:hover {
+            background: #2980b9;
+        }
+        
+        .reset-btn {
+            background: #95a5a6;
+        }
+        
+        .reset-btn:hover {
+            background: #7f8c8d;
+        }
+        
+        .speed-control {
+            margin: 0 20px;
+        }
+        
+        .speed-control select {
+            padding: 8px;
+            border-radius: 4px;
+            border: 1px solid #bdc3c7;
+        }
+        
+        .stats-display {
+            background: #f8f9fa;
+            padding: 15px;
+            border-radius: 5px;
+            margin: 20px 0;
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 15px;
+        }
+        
+        .stat-item {
+            text-align: center;
+        }
+        
+        .stat-value {
+            font-size: 24px;
+            font-weight: bold;
+            color: #e74c3c;
+        }
+        
+        .stat-label {
+            font-size: 12px;
+            color: #7f8c8d;
+            text-transform: uppercase;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🚀 Interactive U.S. Space Economy Analysis</h1>
+            <p>Explore space economy trends from 2012-2023 with dynamic year-by-year visualization</p>
+        </div>
+        
+        <div class="controls">
+            <div class="chart-selector">
+                <label for="chartSelect">View Charts:</label>
+                <select id="chartSelect">
+                    <option value="all">All Charts (Grid View)</option>
+                    <option value="economic">Economic Output Indicators</option>
+                    <option value="labor">Labor Market Indicators</option>
+                    <option value="growth">Growth Rates</option>
+                    <option value="productivity">Labor Productivity Analysis</option>
+                </select>
+            </div>
+            
+            <div class="slider-container">
+                <label for="yearSlider">Select Year Range:</label>
+                <input type="range" id="yearSlider" class="year-slider" min="2012" max="2023" value="2023" step="1">
+                <div class="year-display" id="yearDisplay">2023</div>
+            </div>
+            
+            <div class="play-controls">
+                <button class="play-btn" id="playBtn">▶️ Play Animation</button>
+                <button class="reset-btn" id="resetBtn">🔄 Reset</button>
+                <div class="speed-control">
+                    <label for="speedSelect">Animation Speed:</label>
+                    <select id="speedSelect">
+                        <option value="2000">Slow (2s)</option>
+                        <option value="1000" selected>Normal (1s)</option>
+                        <option value="500">Fast (0.5s)</option>
+                    </select>
+                </div>
+            </div>
+            
+            <div class="stats-display" id="statsDisplay">
+                <!-- Dynamic stats will be populated here -->
+            </div>
+        </div>
+        
+        <!-- Historical Data Section -->
+        <div class="section-header">
+            📊 Historical Analysis (2012-2023)
+        </div>
+        <div class="section-content">
+            <div class="chart-grid" id="historicalCharts">
+                <div class="chart-container" id="economicContainer">
+                    <div class="chart-title">Economic Output Indicators</div>
+                    <canvas id="economicChart" class="chart-canvas"></canvas>
+                </div>
+                
+                <div class="chart-container" id="laborContainer">
+                    <div class="chart-title">Labor Market Indicators</div>
+                    <canvas id="laborChart" class="chart-canvas"></canvas>
+                </div>
+                
+                <div class="chart-container" id="growthContainer">
+                    <div class="chart-title">Growth Rates</div>
+                    <canvas id="growthChart" class="chart-canvas"></canvas>
+                </div>
+                
+                <div class="chart-container" id="productivityContainer">
+                    <div class="chart-title">Labor Productivity Analysis</div>
+                    <canvas id="productivityChart" class="chart-canvas"></canvas>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Predictive Models Section -->
+        <div class="section-header">
+            🔮 Predictive Models & Forecasts (2012-2030)
+            <span class="forecast-indicator">Extended to 2030</span>
+        </div>
+        <div class="section-content">
+            <div class="chart-grid" id="forecastCharts">
+                <div class="chart-container">
+                    <div class="chart-title">ARIMA Forecasts - Economic Indicators</div>
+                    <canvas id="arimaChart" class="chart-canvas"></canvas>
+                </div>
+                
+                <div class="chart-container">
+                    <div class="chart-title">GBM Monte Carlo Simulations</div>
+                    <canvas id="gbmChart" class="chart-canvas"></canvas>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="space_economy_app.js"></script>
+</body>
+</html>
