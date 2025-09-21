@@ -3,7 +3,7 @@ import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
 import seaborn as sns
-from statsmodels.tsa.stattools import adfuller, grangercausalitytests
+from statsmodels.tsa.stattools import adfuller
 from statsmodels.tsa.arima.model import ARIMA
 from scipy import stats
 import warnings
@@ -224,55 +224,6 @@ class SpaceEconomyAnalyzer:
         
         self.adf_results = pd.DataFrame(adf_results)
         return self.adf_results
-    
-    def granger_causality_analysis(self):
-        """Perform Granger causality tests"""
-        print("\nPerforming Granger causality tests...")
-        
-        # Define key relationships to test
-        test_pairs = [
-            ('RealGrossOutput_dlog', 'Employment_dlog'),
-            ('RealGrossOutput_dlog', 'Compensation_dlog'), 
-            ('RealValueAdded_dlog', 'Employment_dlog'),
-            ('Employment_dlog', 'Compensation_dlog'),
-            ('NominalGrossOutput_dlog', 'Compensation_dlog'),
-            ('RealValueAdded_dlog', 'RealGrossOutput_dlog')
-        ]
-        
-        granger_results = []
-        
-        for x_var, y_var in test_pairs:
-            if x_var in self.transformations.columns and y_var in self.transformations.columns:
-                data = self.transformations[[y_var, x_var]].dropna()
-                
-                if len(data) >= 6:  # Need sufficient observations
-                    maxlag = min(2, len(data)//3)  # Conservative lag selection
-                    try:
-                        test_result = grangercausalitytests(data, maxlag=maxlag, verbose=False)
-                        
-                        for lag in test_result.keys():
-                            f_stat = test_result[lag][0]['ssr_ftest'][0]
-                            p_value = test_result[lag][0]['ssr_ftest'][1]
-                            
-                            granger_results.append({
-                                'X_causes_Y': f'{x_var} → {y_var}',
-                                'Lag': lag,
-                                'F_statistic': f_stat,
-                                'p_value': p_value,
-                                'Significant': p_value < 0.1  # Using 10% significance
-                            })
-                    except Exception as e:
-                        granger_results.append({
-                            'X_causes_Y': f'{x_var} → {y_var}',
-                            'Lag': 1,
-                            'F_statistic': np.nan,
-                            'p_value': np.nan,
-                            'Significant': False,
-                            'Error': str(e)
-                        })
-        
-        self.granger_results = pd.DataFrame(granger_results)
-        return self.granger_results
     
     def fit_arima_models(self, forecast_periods=7):
         """Fit ARIMA models for forecasting 2024-2030"""
@@ -508,11 +459,10 @@ class SpaceEconomyAnalyzer:
         
         # Determine layout based on available plots
         n_plots = 0
-        if available_series: n_plots += 1  # Time series overview
+        if available_series: n_plots += 2  # Time series overview (now split into 2 plots)
         if hasattr(self, 'transformations') and available_series: n_plots += 1  # Growth rates
         if hasattr(self, 'arima_results') and self.arima_results: n_plots += 1  # ARIMA
         if hasattr(self, 'gbm_results') and self.gbm_results: n_plots += 1  # GBM
-        if hasattr(self, 'granger_results') and not self.granger_results.empty: n_plots += 1  # Granger
         if hasattr(self, 'profit_results') and self.profit_results: n_plots += 1  # Profit
         if hasattr(self, 'arima_results') and self.arima_results: n_plots += 1  # Residuals
         if len(available_series) >= 2: n_plots += 1  # Correlation
@@ -526,19 +476,43 @@ class SpaceEconomyAnalyzer:
         fig = plt.figure(figsize=(20, 6 * rows))
         plot_num = 1
         
-        # 1. Time series overview (only if we have data)
+        # 1. Economic Output Indicators (RealGrossOutput and RealValueAdded)
         if available_series:
-            plt.subplot(rows, 2, plot_num)
-            for col, series_data in available_series.items():
-                plt.plot(series_data.index, series_data, marker='o', label=col, linewidth=2)
-            plt.title('Key Space Economy Indicators (2012-2023)', fontsize=14, fontweight='bold')
-            plt.xlabel('Year')
-            plt.ylabel('Value')
-            plt.legend()
-            plt.grid(True, alpha=0.3)
-            plot_num += 1
+            output_series = {}
+            for col in ['RealGrossOutput', 'RealValueAdded']:
+                if col in available_series:
+                    output_series[col] = available_series[col]
+            
+            if output_series:
+                plt.subplot(rows, 2, plot_num)
+                for col, series_data in output_series.items():
+                    plt.plot(series_data.index, series_data, marker='o', label=col, linewidth=2)
+                plt.title('Economic Output Indicators (2012-2023)', fontsize=14, fontweight='bold')
+                plt.xlabel('Year')
+                plt.ylabel('Value (Millions)')
+                plt.legend()
+                plt.grid(True, alpha=0.3)
+                plot_num += 1
         
-        # 2. Growth rates (only if we have transformations and data)
+        # 2. Labor Market Indicators (Employment and Compensation)
+        if available_series:
+            labor_series = {}
+            for col in ['Employment', 'Compensation']:
+                if col in available_series:
+                    labor_series[col] = available_series[col]
+            
+            if labor_series:
+                plt.subplot(rows, 2, plot_num)
+                for col, series_data in labor_series.items():
+                    plt.plot(series_data.index, series_data, marker='s', label=col, linewidth=2)
+                plt.title('Labor Market Indicators (2012-2023)', fontsize=14, fontweight='bold')
+                plt.xlabel('Year')
+                plt.ylabel('Value')
+                plt.legend()
+                plt.grid(True, alpha=0.3)
+                plot_num += 1
+        
+        # 3. Growth rates (only if we have transformations and data)
         if hasattr(self, 'transformations') and available_series:
             growth_data = {}
             for col in available_series.keys():
@@ -559,7 +533,7 @@ class SpaceEconomyAnalyzer:
                 plt.axhline(y=0, color='red', linestyle='--', alpha=0.5)
                 plot_num += 1
         
-        # 3. ARIMA Forecasts (only if we have ARIMA results)
+        # 4. ARIMA Forecasts (only if we have ARIMA results)
         if hasattr(self, 'arima_results') and self.arima_results:
             # Find a series to display
             arima_series = None
@@ -599,7 +573,7 @@ class SpaceEconomyAnalyzer:
                 plt.grid(True, alpha=0.3)
                 plot_num += 1
         
-        # 4. GBM Simulation Paths (only if we have GBM results)
+        # 5. GBM Simulation Paths (only if we have GBM results)
         if hasattr(self, 'gbm_results') and self.gbm_results:
             # Find a series to display
             gbm_series = None
@@ -641,32 +615,6 @@ class SpaceEconomyAnalyzer:
                 plt.grid(True, alpha=0.3)
                 plot_num += 1
         
-        # 5. Granger Causality Results (only if significant results exist)
-        if hasattr(self, 'granger_results') and not self.granger_results.empty:
-            significant_results = self.granger_results[self.granger_results['Significant'] == True]
-            
-            if not significant_results.empty:
-                plt.subplot(rows, 2, plot_num)
-                relationships = significant_results['X_causes_Y'].str.replace('_dlog', '').str.replace(' → ', ' → ')
-                p_values = significant_results['p_value']
-                
-                bars = plt.barh(range(len(relationships)), -np.log10(p_values), color='skyblue')
-                plt.yticks(range(len(relationships)), relationships)
-                plt.xlabel('-log10(p-value)')
-                plt.title('Significant Granger Causality Results', fontsize=14, fontweight='bold')
-                plt.axvline(x=-np.log10(0.05), color='red', linestyle='--', label='5% significance')
-                plt.axvline(x=-np.log10(0.1), color='orange', linestyle='--', label='10% significance')
-                plt.legend()
-                
-                # Add value labels on bars
-                for i, bar in enumerate(bars):
-                    width = bar.get_width()
-                    plt.text(width + 0.01, bar.get_y() + bar.get_height()/2, 
-                            f'{p_values.iloc[i]:.3f}', ha='left', va='center')
-                
-                plt.grid(True, alpha=0.3)
-                plot_num += 1
-        
         # 6. Profit Analysis (only if we have profit results)
         if hasattr(self, 'profit_results') and self.profit_results:
             plot_data = {}
@@ -699,15 +647,17 @@ class SpaceEconomyAnalyzer:
             for series_name in ['RealGrossOutput', 'RealValueAdded', 'Compensation']:
                 if series_name in self.arima_results and 'residuals' in self.arima_results[series_name]:
                     residuals = self.arima_results[series_name]['residuals'].dropna()
-                    if len(residuals) > 0:
-                        residual_series = (series_name, residuals)
+                    # Remove 2012 data point as it's an outlier
+                    residuals_filtered = residuals[residuals.index.year != 2012]
+                    if len(residuals_filtered) > 0:
+                        residual_series = (series_name, residuals_filtered)
                         break
             
             if residual_series:
                 plt.subplot(rows, 2, plot_num)
                 series_name, residuals = residual_series
-                plt.plot(residuals.index, residuals, 'o-', alpha=0.7, label=f'{series_name} Residuals')
-                plt.title('ARIMA Model Residuals', fontsize=14, fontweight='bold')
+                plt.plot(residuals.index, residuals, 'o-', alpha=0.7, label=f'{series_name} Residuals (2012 excluded)')
+                plt.title('ARIMA Model Residuals (Outlier Removed)', fontsize=14, fontweight='bold')
                 plt.xlabel('Year')
                 plt.ylabel('Residuals')
                 plt.axhline(y=0, color='red', linestyle='--', alpha=0.5)
@@ -754,16 +704,6 @@ class SpaceEconomyAnalyzer:
                 print(f"   • {col}:")
                 print(f"     - Average annual growth: {growth:.2f}%")
                 print(f"     - Volatility: {volatility:.2f}%")
-        
-        if hasattr(self, 'granger_results'):
-            sig_results = self.granger_results[self.granger_results['Significant'] == True]
-            print(f"\n🔗 GRANGER CAUSALITY:")
-            if not sig_results.empty:
-                print(f"   • Found {len(sig_results)} significant causal relationships")
-                for _, row in sig_results.iterrows():
-                    print(f"     - {row['X_causes_Y']} (p-value: {row['p_value']:.3f})")
-            else:
-                print("   • No significant causal relationships found at 10% level")
         
         if hasattr(self, 'arima_results'):
             print(f"\n📊 ARIMA MODELS (2024-2030 FORECASTS):")
@@ -833,11 +773,6 @@ def main():
     adf_results = analyzer.stationarity_tests()
     print(f"\n📊 Stationarity Test Results:")
     print(adf_results.round(4))
-    
-    granger_results = analyzer.granger_causality_analysis()
-    if not granger_results.empty:
-        print(f"\n🔗 Granger Causality Results:")
-        print(granger_results.round(4))
     
     # Model fitting
     arima_results = analyzer.fit_arima_models()
