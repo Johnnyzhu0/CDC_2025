@@ -124,23 +124,6 @@ pip install pandas openpyxl matplotlib seaborn statsmodels scipy
 python main.py
 ```
 
-## 🔄 Recent Improvements
-
-### Version Updates (September 2025)
-- **✅ Removed Granger Causality Analysis**: Eliminated problematic causality testing due to small sample size limitations
-- **✅ Enhanced Visualization Structure**: Split analysis into 10 focused plots:
-  - Economic Output Indicators (RealGrossOutput, RealValueAdded)
-  - Labor Market Indicators (Employment, Compensation)
-  - Economic Indicators Growth Rates (excluding Compensation)
-  - Compensation Growth Rate (separate chart for high volatility)
-  - Labor Productivity Analysis (dedicated chart)
-  - Labor Cost Ratio Analysis (dedicated chart)
-- **✅ Improved Model Diagnostics**: Excluded 2012 outlier from ARIMA residual analysis for cleaner model assessment
-- **✅ Fixed Economic Calculations**: Corrected "profit margin" to meaningful "labor cost ratio" (0.2% vs. misleading 99.8%)
-- **✅ Better Visual Organization**: 
-  - Optimized plot scaling for different data types and volatility levels
-  - Separated high-volatility compensation growth from stable economic indicators
-  - Added reference lines (mean, zero) for better context
 
 ## 📁 Project Structure
 
